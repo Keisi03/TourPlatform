@@ -1,5 +1,6 @@
 ﻿using CsvHelper;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System.Formats.Asn1;
@@ -57,11 +58,16 @@ public class FileProcessorService : IFileProcessorService
                 SingleReader = false,
                 SingleWriter = true
             });
+            
 
             var initialState = (TotalProcessed: 0, TotalInserted: 0, ErrorCount: 0, LastProgress: DateTime.UtcNow);
+            int userId = await _db.Users
+                        .Where(u => u.Touroperatorid == tourOperatorId)
+                        .Select(u => u.Id)
+                        .FirstOrDefaultAsync(ct);
 
             var workers = Enumerable.Range(0, _settings.MaxWorkers)
-                .Select(_ => Task.Run(() => ProcessBatchesAsync(channel, connectionId, upload, progressInterval, initialState, ct)))
+                .Select(_ => Task.Run(() => ProcessBatchesAsync(channel, connectionId, upload, userId, progressInterval, initialState, ct)))
                 .ToList();
 
             await _hub.Clients.Client(connectionId)
@@ -97,7 +103,7 @@ public class FileProcessorService : IFileProcessorService
             Filename = $"upload_{DateTime.UtcNow:yyyyMMddHHmmss}.csv",
             Status = "Processing",
             Touroperatorid = tourOperatorId,
-            Uploadedat = DateTime.UtcNow
+            Uploadedat = DateTime.Now
         };
         _db.Uploadhistories.Add(upload);
         await _db.SaveChangesAsync(ct);
@@ -137,7 +143,7 @@ public class FileProcessorService : IFileProcessorService
                     Businessprice = csv.GetField<decimal>("BusinessPrice"),
                     Economyseats = csv.GetField<int>("EconomySeats"),
                     Businessseats = csv.GetField<int>("BusinessSeats"),
-                    Uploadedat = DateTime.UtcNow,
+                    Uploadedat = DateTime.Now,
                     Uploadedby = tourOperatorId
                 };
 
@@ -159,6 +165,7 @@ public class FileProcessorService : IFileProcessorService
         Channel<Pricingrecord> channel,
         string connectionId,
         Uploadhistory upload,
+        int userId,
         TimeSpan progressInterval,
         (int TotalProcessed, int TotalInserted, int ErrorCount, DateTime LastProgress) state,
         CancellationToken ct)
@@ -167,6 +174,7 @@ public class FileProcessorService : IFileProcessorService
 
         await foreach (var record in channel.Reader.ReadAllAsync(ct))
         {
+            record.Uploadedby = userId;
             batch.Add(record);
 
             if (batch.Count >= _settings.BatchSize)
@@ -175,9 +183,9 @@ public class FileProcessorService : IFileProcessorService
                 batch.Clear();
             }
 
-            if (connectionId != null && DateTime.UtcNow - state.LastProgress > progressInterval)
+            if (connectionId != null && DateTime.Now - state.LastProgress > progressInterval)
             {
-                state.LastProgress = DateTime.UtcNow;
+                state.LastProgress = DateTime.Now;
                 await SendProgressAsync(connectionId, state.TotalProcessed, state.TotalInserted, state.ErrorCount, "Processing...");
             }
         }
@@ -194,7 +202,7 @@ public class FileProcessorService : IFileProcessorService
         (int TotalProcessed, int TotalInserted, int ErrorCount, DateTime LastProgress) state,
         CancellationToken ct)
     {
-        await _pricingRepo.BulkInsertAsync(batch, ct);
+        await _pricingRepository.BulkInsertAsync(batch, ct);
         state.TotalInserted += batch.Count;
         return state;
     }

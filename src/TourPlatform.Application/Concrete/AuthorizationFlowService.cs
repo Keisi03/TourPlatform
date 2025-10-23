@@ -81,16 +81,33 @@ public class AuthorizationFlowService : IAuthorizationFlowService
         {
             var passwordHash = HashPassword(request.Password);
 
+            int? tourOperatorId = null;
+
+            if (request.Role.Equals("TourOperator", StringComparison.OrdinalIgnoreCase))
+            {
+                var tourOperator = new Touroperator
+                {
+                    Name = request.Username, 
+                    Contactemail = ""
+                };
+
+                _dbContext.Touroperators.Add(tourOperator);
+                await _dbContext.SaveChangesAsync();
+
+                tourOperatorId = tourOperator.Id;
+            }
+
             var user = new User
             {
                 Username = request.Username,
                 Passwordhash = passwordHash,
                 Role = request.Role,
-                Touroperatorid = request.TourOperatorId
+                Touroperatorid = tourOperatorId ?? request.TourOperatorId
             };
 
             _dbContext.Users.Add(user);
             await _dbContext.SaveChangesAsync();
+
             _logger.LogInformation("User {Username} registered successfully with role {Role}", user.Username, user.Role);
 
             return new PlatformUser(user.Username, request.Password, user.Role);

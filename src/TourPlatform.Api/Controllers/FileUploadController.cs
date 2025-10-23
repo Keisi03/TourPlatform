@@ -37,24 +37,24 @@ public class FileUploadController : ControllerBase
         if (file == null || file.Length == 0)
             return BadRequest("File is missing.");
 
-        var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        if (!int.TryParse(userIdStr, out var userId))
-            return Unauthorized("Invalid token: user id missing.");
+        //var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        //if (!int.TryParse(userIdStr, out var userId))
+        //    return Unauthorized("Invalid token: user id missing.");
 
-        var user = await _db.Users.FindAsync(new object[] { userId }, ct);
-        if (user == null)
-            return Unauthorized("User not found.");
+        //var user = await _db.Users.FindAsync(new object[] { userId }, ct);
+        //if (user == null)
+        //    return Unauthorized("User not found.");
 
-        if (user.Role != "TourOperator")
-            return Forbid("Only TourOperator role can upload files.");
+        //if (user.Role != "TourOperator")
+        //    return Forbid("Only TourOperator role can upload files.");
 
-        if (user.Touroperatorid != tourOperatorId)
-            return Forbid("You can upload only for your own tourOperatorId.");
+        //if (user.Touroperatorid != tourOperatorId)
+        //    return Forbid("You can upload only for your own tourOperatorId.");
 
         try
         {
             await _fileProcessor.ProcessCsvAsync(file.OpenReadStream(), tourOperatorId, connectionId, ct);
-            return Ok(new { message = "Upload started" });
+            return Ok(new { message = "Upload Done" });
         }
         catch (Exception ex)
         {
